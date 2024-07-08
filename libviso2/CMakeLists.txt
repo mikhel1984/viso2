@@ -44,7 +44,7 @@ ament_export_targets(viso2 HAS_LIBRARY_TARGET)
 ament_target_dependencies(viso2 rclcpp)
 
 install(DIRECTORY ${PROJECT_NAME}/src/
-  DESTINATION include
+  DESTINATION include/viso2
   PATTERN "*.cpp" EXCLUDE
 )
 

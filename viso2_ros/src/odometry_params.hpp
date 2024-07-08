@@ -1,45 +1,46 @@
-#include <ros/ros.h>
+#include <rclcpp/node.hpp>
 
-#include <viso_stereo.h>
-#include <viso_mono.h>
-#include <viso_mono_omnidirectional.h>
+//#include <viso_stereo.h>
+#include <viso2/viso_mono.h>
+//#include <viso_mono_omnidirectional.h>
 
-namespace viso2_ros
+namespace viso2_ros2
 {
 
 namespace odometry_params
 {
  
 /// loads matcher params
-void loadParams(const ros::NodeHandle& local_nh, Matcher::parameters& params)
+void loadParams(rclcpp::Node* n, Matcher::parameters& params)
 {
-  local_nh.getParam("nms_n",                  params.nms_n);
-  local_nh.getParam("nms_tau",                params.nms_tau);
-  local_nh.getParam("match_binsize",          params.match_binsize);
-  local_nh.getParam("match_radius",           params.match_radius);
-  local_nh.getParam("match_disp_tolerance",   params.match_disp_tolerance);
-  local_nh.getParam("outlier_disp_tolerance", params.outlier_disp_tolerance);
-  local_nh.getParam("outlier_flow_tolerance", params.outlier_flow_tolerance);
-  local_nh.getParam("multi_stage",            params.multi_stage);
-  local_nh.getParam("half_resolution",        params.half_resolution);
-  local_nh.getParam("refinement",             params.refinement);
+  params.nms_n                  = n->declare_parameter("nms_n", 3);
+  params.nms_tau                = n->declare_parameter("nms_tau", 50);
+  params.match_binsize          = n->declare_parameter("match_binsize", 50);
+  params.match_radius           = n->declare_parameter("match_radius", 200);
+  params.match_disp_tolerance   = n->declare_parameter("match_disp_tolerance", 2);
+  params.outlier_disp_tolerance = n->declare_parameter("outlier_disp_tolerance", 5);
+  params.outlier_flow_tolerance = n->declare_parameter("outlier_flow_tolerance", 5);
+  params.multi_stage            = n->declare_parameter("multi_stage", 1);
+  params.half_resolution        = n->declare_parameter("half_resolution", 1);
+  params.refinement             = n->declare_parameter("refinement", 1);
 }
 
 /// loads bucketing params
-void loadParams(const ros::NodeHandle& local_nh, VisualOdometry::bucketing& bucketing)
+void loadParams(rclcpp::Node* n, VisualOdometry::bucketing& bucketing)
 {
-  local_nh.getParam("max_features",  bucketing.max_features);
-  local_nh.getParam("bucket_width",  bucketing.bucket_width);
-  local_nh.getParam("bucket_height", bucketing.bucket_height);
+  bucketing.max_features  = n->declare_parameter("max_features", 2);
+  bucketing.bucket_width  = n->declare_parameter("bucket_width", 50);
+  bucketing.bucket_height = n->declare_parameter("bucket_height", 50);
 }
 
 /// loads common odometry params
-void loadCommonParams(const ros::NodeHandle& local_nh, VisualOdometry::parameters& params)
+void loadCommonParams(rclcpp::Node* n, VisualOdometry::parameters& params)
 {
-  loadParams(local_nh, params.match);
-  loadParams(local_nh, params.bucket);
+  loadParams(n, params.match);
+  loadParams(n, params.bucket);
 }
 
+/*
 /// loads common & stereo specific params
 void loadParams(const ros::NodeHandle& local_nh, VisualOdometryStereo::parameters& params)
 {
@@ -48,24 +49,20 @@ void loadParams(const ros::NodeHandle& local_nh, VisualOdometryStereo::parameter
   local_nh.getParam("inlier_threshold", params.inlier_threshold);
   local_nh.getParam("reweighting",      params.reweighting);
 }
+*/
 
 /// loads common & mono specific params
-void loadParams(const ros::NodeHandle& local_nh, VisualOdometryMono::parameters& params)
+void loadParams(rclcpp::Node* n, VisualOdometryMono::parameters& params)
 {
-  loadCommonParams(local_nh, params);
-  if (!local_nh.getParam("camera_height", params.height))
-  {
-    ROS_WARN("Parameter 'camera_height' is required but not set. Using default: %f", params.height);
-  }
-  if (!local_nh.getParam("camera_pitch", params.pitch))
-  {
-    ROS_WARN("Paramter 'camera_pitch' is required but not set. Using default: %f", params.pitch);
-  }
-  local_nh.getParam("ransac_iters",     params.ransac_iters);
-  local_nh.getParam("inlier_threshold", params.inlier_threshold);
-  local_nh.getParam("motion_threshold", params.motion_threshold);
+  loadCommonParams(n, params);
+  params.height           = n->declare_parameter("camera_height", 1.0);
+  params.pitch            = n->declare_parameter("camera_pitch", 0.0);
+  params.ransac_iters     = n->declare_parameter("ransac_iters", 2000);
+  params.inlier_threshold = n->declare_parameter("inlier_threshold", 1E-5);
+  params.motion_threshold = n->declare_parameter("motion_threshold", 50.0);
 }
 
+/*
 /// loads common & omnidirectional mono specific params
 void loadParams(const ros::NodeHandle& local_nh, VisualOdometryMonoOmnidirectional::parameters& params)
 {
@@ -145,8 +142,8 @@ void loadParams(const ros::NodeHandle& local_nh, VisualOdometryMonoOmnidirection
     params.omnidirectional_calib.pol[0]    = 1;
     params.omnidirectional_calib.invpol[0] = 1;
   }
-
 }
+*/
 
 } // end of namespace
 
@@ -195,7 +192,9 @@ std::ostream& operator<<(std::ostream& out, const VisualOdometry::omnidirectiona
   out << "  fy           = " << params.fy << std::endl;
   out << "  cx           = " << params.cx << std::endl;
   out << "  cy           = " << params.cy << std::endl;
+  return out;
 }
+
 
 std::ostream& operator<<(std::ostream& out, const VisualOdometry::bucketing& bucketing)
 {
@@ -212,7 +211,7 @@ std::ostream& operator<<(std::ostream& out, const VisualOdometry::parameters& pa
   out << "Bucketing parameters:" << std::endl << params.bucket;
   return out;
 }
-
+/*
 std::ostream& operator<<(std::ostream& out, const VisualOdometryStereo::parameters& params)
 {
   out << static_cast<VisualOdometry::parameters>(params);
@@ -223,7 +222,7 @@ std::ostream& operator<<(std::ostream& out, const VisualOdometryStereo::paramete
   out << "  reweighting      = " << params.reweighting << std::endl;
   return out;
 }
-
+*/
 std::ostream& operator<<(std::ostream& out, const VisualOdometryMono::parameters& params)
 {
   out << static_cast<VisualOdometry::parameters>(params);
