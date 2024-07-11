@@ -17,7 +17,7 @@
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <tf2_ros/buffer.h>
 
-namespace viso2_ros2
+namespace viso2_ros
 {
 
 /**

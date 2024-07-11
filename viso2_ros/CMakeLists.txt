@@ -62,10 +62,22 @@ target_link_libraries(mono_odometer
   libviso2::viso2
 )
 
-#add_executable(mono_odometer_omnidirectional
-#  src/mono_odometer_omnidirectional.cpp)
-#add_dependencies(mono_odometer_omnidirectional ${catkin_EXPORTED_TARGETS})
-#add_dependencies(mono_odometer_omnidirectional ${PROJECT_NAME}_gencpp)
+add_executable(mono_odometer_omnidirectional src/mono_odometer_omnidirectional.cpp)
+ament_target_dependencies(mono_odometer_omnidirectional
+  rclcpp
+  nav_msgs
+  sensor_msgs
+  image_transport
+  viso2_msgs
+  std_srvs
+  tf2_ros
+  tf2_geometry_msgs
+  image_geometry
+  cv_bridge
+)
+target_link_libraries(mono_odometer_omnidirectional
+  libviso2::viso2
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -77,6 +89,7 @@ endif()
 install(
   TARGETS
   mono_odometer
+  mono_odometer_omnidirectional
   DESTINATION lib/${PROJECT_NAME}
 )
 

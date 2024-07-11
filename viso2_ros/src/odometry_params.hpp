@@ -2,9 +2,9 @@
 
 //#include <viso_stereo.h>
 #include <viso2/viso_mono.h>
-//#include <viso_mono_omnidirectional.h>
+#include <viso2/viso_mono_omnidirectional.h>
 
-namespace viso2_ros2
+namespace viso2_ros
 {
 
 namespace odometry_params
@@ -62,17 +62,16 @@ void loadParams(rclcpp::Node* n, VisualOdometryMono::parameters& params)
   params.motion_threshold = n->declare_parameter("motion_threshold", 50.0);
 }
 
-/*
-/// loads common & omnidirectional mono specific params
-void loadParams(const ros::NodeHandle& local_nh, VisualOdometryMonoOmnidirectional::parameters& params)
-{
-  loadCommonParams(local_nh, params);
-  local_nh.getParam("ransac_iters",     params.ransac_iters);
-  local_nh.getParam("inlier_threshold", params.inlier_threshold);
-  local_nh.getParam("motion_threshold", params.motion_threshold);
 
-  std::string path;
-  local_nh.getParam("calib_path", path);
+/// loads common & omnidirectional mono specific params
+void loadParams(rclcpp::Node* n, VisualOdometryMonoOmnidirectional::parameters& params)
+{
+  loadCommonParams(n, params);
+  params.ransac_iters     = n->declare_parameter("ransac_iters", 2000);
+  params.inlier_threshold = n->declare_parameter("inlier_threshold", 1E-5);
+  params.motion_threshold = n->declare_parameter("motion_threshold", 100.0);
+
+  std::string path = n->declare_parameter("calib_path", "");
   std::ifstream file(path.c_str());
   if(file.is_open())
   {
@@ -143,7 +142,7 @@ void loadParams(const ros::NodeHandle& local_nh, VisualOdometryMonoOmnidirection
     params.omnidirectional_calib.invpol[0] = 1;
   }
 }
-*/
+
 
 } // end of namespace
 

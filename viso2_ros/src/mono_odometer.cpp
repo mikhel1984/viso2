@@ -19,13 +19,13 @@
 
 //#include <iostream>
 
-namespace viso2_ros2
+namespace viso2_ros
 {
 
 class MonoOdometer : public OdometerBase
 {
 public:
-  MonoOdometer(const std::string& transport);
+  MonoOdometer(const std::string& name);
 
 protected:
 
@@ -50,8 +50,8 @@ private:
   
 }; // MonoOdometer
 
-MonoOdometer::MonoOdometer(const std::string& transport) 
-: OdometerBase(transport)
+MonoOdometer::MonoOdometer(const std::string& name) 
+: OdometerBase(name)
 , node_handle_(std::shared_ptr<MonoOdometer>(this, [](auto*) {}))
 , it_(node_handle_)
 , replace_(false)
@@ -160,7 +160,7 @@ void MonoOdometer::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& 
 int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<viso2_ros2::MonoOdometer>("mono_odometer");
+  auto node = std::make_shared<viso2_ros::MonoOdometer>("mono_odometer");
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
