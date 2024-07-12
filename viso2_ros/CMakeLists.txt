@@ -39,10 +39,22 @@ else(ARM_CROSS_COMPILATION)
 endif(ARM_CROSS_COMPILATION)
 
 
-#add_executable(stereo_odometer
-#  src/stereo_odometer.cpp)
-#add_dependencies(stereo_odometer ${catkin_EXPORTED_TARGETS})
-#add_dependencies(stereo_odometer ${PROJECT_NAME}_gencpp)
+add_executable(stereo_odometer src/stereo_odometer.cpp)
+ament_target_dependencies(stereo_odometer
+  rclcpp
+  nav_msgs
+  sensor_msgs
+  image_transport
+  viso2_msgs
+  std_srvs
+  tf2_ros
+  tf2_geometry_msgs
+  image_geometry
+  cv_bridge
+)
+target_link_libraries(stereo_odometer
+  libviso2::viso2
+)
 
 add_executable(mono_odometer
   src/mono_odometer.cpp)
@@ -90,6 +102,7 @@ install(
   TARGETS
   mono_odometer
   mono_odometer_omnidirectional
+  stereo_odometer
   DESTINATION lib/${PROJECT_NAME}
 )
 

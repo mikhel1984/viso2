@@ -1,40 +1,38 @@
-#include <ros/ros.h>
-#include <sensor_msgs/image_encodings.h>
 #include <image_geometry/stereo_camera_model.h>
 #include <cv_bridge/cv_bridge.h>
-#include <pcl_ros/point_cloud.h>
-#include <pcl/point_types.h>
+#include <rcpputils/asserts.hpp>
 
-#include <viso_stereo.h>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/point_cloud2_iterator.hpp>
 
-#include <viso2_ros/VisoInfo.h>
+#include <viso2/viso_stereo.h>
+#include <viso2_msgs/msg/viso_info.hpp>
 
-#include "stereo_processor.h"
-#include "odometer_base.h"
-#include "odometry_params.h"
+#include "stereo_processor.hpp"
+#include "odometry_params.hpp"
 
 // to remove after debugging
-#include <opencv2/highgui/highgui.hpp>
+//#include <opencv2/highgui/highgui.hpp>
 
 namespace viso2_ros
 {
 
 // some arbitrary values (0.1m^2 linear cov. 10deg^2. angular cov.)
-static const boost::array<double, 36> STANDARD_POSE_COVARIANCE =
+static const std::array<double, 36> STANDARD_POSE_COVARIANCE =
 { { 0.1, 0, 0, 0, 0, 0,
     0, 0.1, 0, 0, 0, 0,
     0, 0, 0.1, 0, 0, 0,
     0, 0, 0, 0.17, 0, 0,
     0, 0, 0, 0, 0.17, 0,
     0, 0, 0, 0, 0, 0.17 } };
-static const boost::array<double, 36> STANDARD_TWIST_COVARIANCE =
+static const std::array<double, 36> STANDARD_TWIST_COVARIANCE =
 { { 0.002, 0, 0, 0, 0, 0,
     0, 0.002, 0, 0, 0, 0,
     0, 0, 0.05, 0, 0, 0,
     0, 0, 0, 0.09, 0, 0,
     0, 0, 0, 0, 0.09, 0,
     0, 0, 0, 0, 0, 0.09 } };
-static const boost::array<double, 36> BAD_COVARIANCE =
+static const std::array<double, 36> BAD_COVARIANCE =
 { { 9999, 0, 0, 0, 0, 0,
     0, 9999, 0, 0, 0, 0,
     0, 0, 9999, 0, 0, 0,
@@ -43,16 +41,16 @@ static const boost::array<double, 36> BAD_COVARIANCE =
     0, 0, 0, 0, 0, 9999 } };
 
 
-class StereoOdometer : public StereoProcessor, public OdometerBase
+class StereoOdometer : public StereoProcessor
 {
 
 private:
 
-  boost::shared_ptr<VisualOdometryStereo> visual_odometer_;
+  std::shared_ptr<VisualOdometryStereo> visual_odometer_;
   VisualOdometryStereo::parameters visual_odometer_params_;
-
-  ros::Publisher point_cloud_pub_;
-  ros::Publisher info_pub_;
+  
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_pub_;
+  rclcpp::Publisher<viso2_msgs::msg::VisoInfo>::SharedPtr info_pub_;
 
   bool got_lost_;
 
@@ -65,22 +63,21 @@ private:
 
 public:
 
-  typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloud;
+  //typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloud;
 
   StereoOdometer(const std::string& transport) :
-    StereoProcessor(transport), OdometerBase(),
+    StereoProcessor(transport),
     got_lost_(false), change_reference_frame_(false)
   {
     // Read local parameters
-    ros::NodeHandle local_nh("~");
-    odometry_params::loadParams(local_nh, visual_odometer_params_);
+    odometry_params::loadParams(this, visual_odometer_params_);
 
-    local_nh.param("ref_frame_change_method", ref_frame_change_method_, 0);
-    local_nh.param("ref_frame_motion_threshold", ref_frame_motion_threshold_, 5.0);
-    local_nh.param("ref_frame_inlier_threshold", ref_frame_inlier_threshold_, 150);
+    ref_frame_change_method_ = this->declare_parameter("ref_frame_change_method", 0);
+    ref_frame_motion_threshold_ = this->declare_parameter("ref_frame_motion_threshold", 5.0);
+    ref_frame_inlier_threshold_ = this->declare_parameter("ref_frame_inlier_threshold", 150);
 
-    point_cloud_pub_ = local_nh.advertise<PointCloud>("point_cloud", 1);
-    info_pub_ = local_nh.advertise<VisoInfo>("info", 1);
+    point_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("point_cloud", 1);
+    info_pub_ = this->create_publisher<viso2_msgs::msg::VisoInfo>("info", 1);
 
     reference_motion_ = Matrix::eye(4);
   }
@@ -88,14 +85,11 @@ public:
 protected:
 
   void initOdometer(
-      const sensor_msgs::CameraInfoConstPtr& l_info_msg,
-      const sensor_msgs::CameraInfoConstPtr& r_info_msg)
+      const sensor_msgs::msg::CameraInfo::ConstSharedPtr& l_info_msg,
+      const sensor_msgs::msg::CameraInfo::ConstSharedPtr& r_info_msg)
   {
-    int queue_size;
-    bool approximate_sync;
-    ros::NodeHandle local_nh("~");
-    local_nh.param("queue_size", queue_size, 5);
-    local_nh.param("approximate_sync", approximate_sync, false);
+    int queue_size = this->get_parameter("queue_size").as_int();
+    bool approximate_sync = this->get_parameter("approximate_sync").as_bool();
 
     // read calibration info from camera info message
     // to fill remaining parameters
@@ -108,7 +102,8 @@ protected:
 
     visual_odometer_.reset(new VisualOdometryStereo(visual_odometer_params_));
     if (l_info_msg->header.frame_id != "") setSensorFrameId(l_info_msg->header.frame_id);
-    ROS_INFO_STREAM("Initialized libviso2 stereo odometry "
+    RCLCPP_INFO_STREAM(this->get_logger(), 
+                    "Initialized libviso2 stereo odometry "
                     "with the following parameters:" << std::endl <<
                     visual_odometer_params_ <<
                     "  queue_size = " << queue_size << std::endl <<
@@ -119,12 +114,12 @@ protected:
   }
 
   void imageCallback(
-      const sensor_msgs::ImageConstPtr& l_image_msg,
-      const sensor_msgs::ImageConstPtr& r_image_msg,
-      const sensor_msgs::CameraInfoConstPtr& l_info_msg,
-      const sensor_msgs::CameraInfoConstPtr& r_info_msg)
+      const sensor_msgs::msg::Image::ConstSharedPtr& l_image_msg,
+      const sensor_msgs::msg::Image::ConstSharedPtr& r_image_msg,
+      const sensor_msgs::msg::CameraInfo::ConstSharedPtr& l_info_msg,
+      const sensor_msgs::msg::CameraInfo::ConstSharedPtr& r_info_msg)
   {
-    ros::WallTime start_time = ros::WallTime::now();
+    rclcpp::Time start_time = this->get_clock()->now();
     bool first_run = false;
     // create odometer if not exists
     if (!visual_odometer_)
@@ -144,11 +139,12 @@ protected:
     r_image_data = r_cv_ptr->image.data;
     r_step = r_cv_ptr->image.step[0];
 
-    ROS_ASSERT(l_step == r_step);
-    ROS_ASSERT(l_image_msg->width == r_image_msg->width);
-    ROS_ASSERT(l_image_msg->height == r_image_msg->height);
+    rcpputils::assert_true(l_step == r_step);
+    rcpputils::assert_true(l_image_msg->width == r_image_msg->width);
+    rcpputils::assert_true(l_image_msg->height == r_image_msg->height);
 
-    int32_t dims[] = {l_image_msg->width, l_image_msg->height, l_step};
+    int32_t dims[] = {static_cast<int32_t>(l_image_msg->width), 
+      static_cast<int32_t>(l_image_msg->height), l_step};
     // on first run or when odometer got lost, only feed the odometer with
     // images without retrieving data
     if (first_run || got_lost_)
@@ -158,7 +154,7 @@ protected:
       // on first run publish zero once
       if (first_run)
       {
-        tf::Transform delta_transform;
+        tf2::Transform delta_transform;
         delta_transform.setIdentity();
         integrateAndPublish(delta_transform, l_image_msg->header.stamp);
       }
@@ -170,10 +166,10 @@ protected:
       if (success)
       {
         Matrix motion = Matrix::inv(visual_odometer_->getMotion());
-        ROS_DEBUG("Found %i matches with %i inliers.",
+        RCLCPP_DEBUG(this->get_logger(), "Found %i matches with %i inliers.",
                   visual_odometer_->getNumberOfMatches(),
                   visual_odometer_->getNumberOfInliers());
-        ROS_DEBUG_STREAM("libviso2 returned the following motion:\n" << motion);
+        RCLCPP_DEBUG_STREAM(this->get_logger(), "libviso2 returned the following motion:\n" << motion);
         Matrix camera_motion;
         // if image was replaced due to small motion we have to subtract the
         // last motion to get the increment
@@ -188,19 +184,19 @@ protected:
         }
         reference_motion_ = motion; // store last motion as reference
 
-        tf::Matrix3x3 rot_mat(
+        tf2::Matrix3x3 rot_mat(
           camera_motion.val[0][0], camera_motion.val[0][1], camera_motion.val[0][2],
           camera_motion.val[1][0], camera_motion.val[1][1], camera_motion.val[1][2],
           camera_motion.val[2][0], camera_motion.val[2][1], camera_motion.val[2][2]);
-        tf::Vector3 t(camera_motion.val[0][3], camera_motion.val[1][3], camera_motion.val[2][3]);
-        tf::Transform delta_transform(rot_mat, t);
+        tf2::Vector3 t(camera_motion.val[0][3], camera_motion.val[1][3], camera_motion.val[2][3]);
+        tf2::Transform delta_transform(rot_mat, t);
 
         setPoseCovariance(STANDARD_POSE_COVARIANCE);
         setTwistCovariance(STANDARD_TWIST_COVARIANCE);
 
         integrateAndPublish(delta_transform, l_image_msg->header.stamp);
 
-        if (point_cloud_pub_.getNumSubscribers() > 0)
+        if (point_cloud_pub_->get_subscription_count() > 0)
         {
           computeAndPublishPointCloud(l_info_msg, l_image_msg, r_info_msg,
                                       visual_odometer_->getMatches(),
@@ -211,12 +207,13 @@ protected:
       {
         setPoseCovariance(BAD_COVARIANCE);
         setTwistCovariance(BAD_COVARIANCE);
-        tf::Transform delta_transform;
+        tf2::Transform delta_transform;
         delta_transform.setIdentity();
         integrateAndPublish(delta_transform, l_image_msg->header.stamp);
 
-        ROS_DEBUG("Call to VisualOdometryStereo::process() failed.");
-        ROS_WARN_THROTTLE(10.0, "Visual Odometer got lost!");
+        RCLCPP_DEBUG(this->get_logger(), "Call to VisualOdometryStereo::process() failed.");
+        auto& clk = *this->get_clock();
+        RCLCPP_WARN_THROTTLE(this->get_logger(), clk, 100.0, "Visual Odometer got lost!");
         got_lost_ = true;
       }
 
@@ -231,7 +228,7 @@ protected:
             // calculate current feature flow
             double feature_flow = computeFeatureFlow(visual_odometer_->getMatches());
             change_reference_frame_ = (feature_flow < ref_frame_motion_threshold_);
-            ROS_DEBUG_STREAM("Feature flow is " << feature_flow
+            RCLCPP_DEBUG_STREAM(this->get_logger(), "Feature flow is " << feature_flow
                 << ", marking last motion as "
                 << (change_reference_frame_ ? "small." : "normal."));
             break;
@@ -250,18 +247,18 @@ protected:
         change_reference_frame_ = false;
 
       if(!change_reference_frame_)
-        ROS_DEBUG_STREAM("Changing reference frame");
+        RCLCPP_DEBUG(this->get_logger(), "Changing reference frame");
 
       // create and publish viso2 info msg
-      VisoInfo info_msg;
+      viso2_msgs::msg::VisoInfo info_msg;
       info_msg.header.stamp = l_image_msg->header.stamp;
       info_msg.got_lost = !success;
       info_msg.change_reference_frame = !change_reference_frame_;
       info_msg.num_matches = visual_odometer_->getNumberOfMatches();
       info_msg.num_inliers = visual_odometer_->getNumberOfInliers();
-      ros::WallDuration time_elapsed = ros::WallTime::now() - start_time;
-      info_msg.runtime = time_elapsed.toSec();
-      info_pub_.publish(info_msg);
+      rclcpp::Duration time_elapsed = this->get_clock()->now() - start_time;
+      info_msg.runtime = time_elapsed.seconds();
+      info_pub_->publish(info_msg);
     }
   }
 
@@ -279,9 +276,9 @@ protected:
   }
 
   void computeAndPublishPointCloud(
-      const sensor_msgs::CameraInfoConstPtr& l_info_msg,
-      const sensor_msgs::ImageConstPtr& l_image_msg,
-      const sensor_msgs::CameraInfoConstPtr& r_info_msg,
+      const sensor_msgs::msg::CameraInfo::ConstSharedPtr& l_info_msg,
+      const sensor_msgs::msg::Image::ConstSharedPtr& l_image_msg,
+      const sensor_msgs::msg::CameraInfo::ConstSharedPtr& r_info_msg,
       const std::vector<Matcher::p_match>& matches,
       const std::vector<int32_t>& inlier_indices)
   {
@@ -292,12 +289,24 @@ protected:
       // read calibration info from camera info message
       image_geometry::StereoCameraModel model;
       model.fromCameraInfo(*l_info_msg, *r_info_msg);
-      PointCloud::Ptr point_cloud(new PointCloud());
-      point_cloud->header.frame_id = getSensorFrameId();
-      point_cloud->header.stamp = pcl_conversions::toPCL(l_info_msg->header).stamp;
-      point_cloud->width = 1;
-      point_cloud->height = inlier_indices.size();
-      point_cloud->points.resize(inlier_indices.size());
+
+      sensor_msgs::msg::PointCloud2 point_cloud;
+      point_cloud.header.frame_id = getSensorFrameId();
+      point_cloud.header.stamp = l_info_msg->header.stamp;
+      point_cloud.width = 1;
+      point_cloud.height = inlier_indices.size();
+
+      // settings
+      sensor_msgs::PointCloud2Modifier modifier(point_cloud);
+      modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
+      modifier.resize(inlier_indices.size());
+
+      sensor_msgs::PointCloud2Iterator<float> iter_x(point_cloud, "x");
+      sensor_msgs::PointCloud2Iterator<float> iter_y(point_cloud, "y");
+      sensor_msgs::PointCloud2Iterator<float> iter_z(point_cloud, "z");
+      sensor_msgs::PointCloud2Iterator<uint8_t> iter_r(point_cloud, "r");
+      sensor_msgs::PointCloud2Iterator<uint8_t> iter_g(point_cloud, "g");
+      sensor_msgs::PointCloud2Iterator<uint8_t> iter_b(point_cloud, "b");
 
       for (size_t i = 0; i < inlier_indices.size(); ++i)
       {
@@ -308,20 +317,20 @@ protected:
         cv::Point3d point;
         double disparity = match.u1c - match.u2c;
         model.projectDisparityTo3d(left_uv, disparity, point);
-        point_cloud->points[i].x = point.x;
-        point_cloud->points[i].y = point.y;
-        point_cloud->points[i].z = point.z;
+        *iter_x = point.x;  ++iter_x;
+        *iter_y = point.y;  ++iter_y;
+        *iter_z = point.z;  ++iter_z;
         cv::Vec3b color = cv_ptr->image.at<cv::Vec3b>(left_uv.y,left_uv.x);
-        point_cloud->points[i].r = color[0];
-        point_cloud->points[i].g = color[1];
-        point_cloud->points[i].b = color[2];
+        *iter_r = color[0];  ++iter_r;
+        *iter_g = color[1];  ++iter_g;
+        *iter_b = color[2];  ++iter_b;
       }
-      ROS_DEBUG("Publishing point cloud with %zu points.", point_cloud->size());
-      point_cloud_pub_.publish(point_cloud);
+      RCLCPP_DEBUG(this->get_logger(), "Publishing point cloud with %zu points.", point_cloud.data.size());
+      point_cloud_pub_->publish(point_cloud);
     }
     catch (cv_bridge::Exception& e)
     {
-      ROS_ERROR("cv_bridge exception: %s", e.what());
+      RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
     }
   }
 };
@@ -331,21 +340,10 @@ protected:
 
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "stereo_odometer");
-  if (ros::names::remap("stereo") == "stereo") {
-    ROS_WARN("'stereo' has not been remapped! Example command-line usage:\n"
-             "\t$ rosrun viso2_ros stereo_odometer stereo:=narrow_stereo image:=image_rect");
-  }
-  if (ros::names::remap("image").find("rect") == std::string::npos) {
-    ROS_WARN("stereo_odometer needs rectified input images. The used image "
-             "topic is '%s'. Are you sure the images are rectified?",
-             ros::names::remap("image").c_str());
-  }
-
-  std::string transport = argc > 1 ? argv[1] : "raw";
-  viso2_ros::StereoOdometer odometer(transport);
-
-  ros::spin();
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<viso2_ros::StereoOdometer>("stereo_odometer");
+  rclcpp::spin(node);
+  rclcpp::shutdown();
   return 0;
 }
 

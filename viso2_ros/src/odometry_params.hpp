@@ -1,6 +1,6 @@
 #include <rclcpp/node.hpp>
 
-//#include <viso_stereo.h>
+#include <viso2/viso_stereo.h>
 #include <viso2/viso_mono.h>
 #include <viso2/viso_mono_omnidirectional.h>
 
@@ -40,16 +40,14 @@ void loadCommonParams(rclcpp::Node* n, VisualOdometry::parameters& params)
   loadParams(n, params.bucket);
 }
 
-/*
 /// loads common & stereo specific params
-void loadParams(const ros::NodeHandle& local_nh, VisualOdometryStereo::parameters& params)
+void loadParams(rclcpp::Node* n, VisualOdometryStereo::parameters& params)
 {
-  loadCommonParams(local_nh, params);
-  local_nh.getParam("ransac_iters",     params.ransac_iters);
-  local_nh.getParam("inlier_threshold", params.inlier_threshold);
-  local_nh.getParam("reweighting",      params.reweighting);
+  loadCommonParams(n, params);
+  params.ransac_iters     = n->declare_parameter("ransac_iters", 2000);
+  params.inlier_threshold = n->declare_parameter("inlier_threshold", 1E-5);
+  params.reweighting      = n->declare_parameter("reweighting", true);
 }
-*/
 
 /// loads common & mono specific params
 void loadParams(rclcpp::Node* n, VisualOdometryMono::parameters& params)
@@ -210,7 +208,7 @@ std::ostream& operator<<(std::ostream& out, const VisualOdometry::parameters& pa
   out << "Bucketing parameters:" << std::endl << params.bucket;
   return out;
 }
-/*
+
 std::ostream& operator<<(std::ostream& out, const VisualOdometryStereo::parameters& params)
 {
   out << static_cast<VisualOdometry::parameters>(params);
@@ -221,7 +219,7 @@ std::ostream& operator<<(std::ostream& out, const VisualOdometryStereo::paramete
   out << "  reweighting      = " << params.reweighting << std::endl;
   return out;
 }
-*/
+
 std::ostream& operator<<(std::ostream& out, const VisualOdometryMono::parameters& params)
 {
   out << static_cast<VisualOdometry::parameters>(params);

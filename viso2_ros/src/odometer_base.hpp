@@ -1,4 +1,3 @@
-
 #ifndef ODOMETER_BASE_HPP_
 #define ODOMETER_BASE_HPP_
 
