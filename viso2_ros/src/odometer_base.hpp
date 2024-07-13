@@ -59,11 +59,11 @@ public:
   : Node(name)
   {
     using namespace std::placeholders;
-    odom_frame_id_ = this->declare_parameter("odom_frame_id", std::string("/odom"));
-    base_link_frame_id_ = this->declare_parameter("base_link_frame_id", std::string("/base_link"));
-    sensor_frame_id_ = this->declare_parameter("sensor_frame_id", std::string("/camera"));
-    publish_tf_ = this->declare_parameter("publish_tf", true);
-    invert_tf_ = this->declare_parameter("invert_tf", false);
+    odom_frame_id_      = this->declare_parameter("odom_frame_id", "/odom");
+    base_link_frame_id_ = this->declare_parameter("base_link_frame_id", "/base_link");
+    sensor_frame_id_    = this->declare_parameter("sensor_frame_id", "/camera");
+    publish_tf_         = this->declare_parameter("publish_tf", true);
+    invert_tf_          = this->declare_parameter("invert_tf", false);
 
     RCLCPP_INFO_STREAM(this->get_logger(), "Basic Odometer Settings:" << std::endl <<
       "  odom_frame_id      = " << odom_frame_id_ << std::endl <<
@@ -122,19 +122,20 @@ protected:
     {
       RCLCPP_WARN(this->get_logger(), "[odometer] saw negative time change in incoming sensor data, resetting pose.");
       integrated_pose_.setIdentity();
-      //tf_listener_.clear();
+      tf_buffer_->clear();
     }
     integrated_pose_ *= delta_transform;
 
     // transform integrated pose to base frame
     geometry_msgs::msg::TransformStamped b2s;
-    std::string error_msg;
+    tf2::Transform base_to_sensor;
     
     try {
       b2s = tf_buffer_->lookupTransform(
         base_link_frame_id_, 
         sensor_frame_id_, 
         timestamp);
+      tf2::fromMsg(b2s.transform, base_to_sensor);
     } catch (tf2::TransformException &ex) {
       auto& clk = *this->get_clock();
       RCLCPP_WARN_THROTTLE(this->get_logger(), clk, 10.0, 
@@ -142,11 +143,9 @@ protected:
          "will assume it as identity!",
          base_link_frame_id_.c_str(),
          sensor_frame_id_.c_str());
+         RCLCPP_DEBUG(this->get_logger(), "Transform error: %s", ex.what());
+      base_to_sensor.setIdentity();
     }
-    
-    // geometry_msg to tf2 
-    tf2::Transform base_to_sensor;
-    tf2::fromMsg(b2s.transform, base_to_sensor);
     
     tf2::Transform base_transform = base_to_sensor * integrated_pose_ * base_to_sensor.inverse();
 

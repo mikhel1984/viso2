@@ -4,14 +4,12 @@
 #include <sensor_msgs/msg/image.hpp>
 
 #include <viso2/viso_mono.h>
-
+#include <viso2_msgs/msg/viso_info.hpp>
 
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/camera_subscriber.hpp>
 #include <image_transport/image_transport.hpp>
 #include <image_geometry/pinhole_camera_model.h>
-
-#include <viso2_msgs/msg/viso_info.hpp>
 
 #include "odometer_base.hpp"
 #include "odometry_params.hpp"
@@ -25,7 +23,7 @@ namespace viso2_ros
 class MonoOdometer : public OdometerBase
 {
 public:
-  MonoOdometer(const std::string& name);
+  MonoOdometer(const std::string& transport);
 
 protected:
 
@@ -37,10 +35,6 @@ private:
   std::shared_ptr<VisualOdometryMono> visual_odometer_;
   
   VisualOdometryMono::parameters visual_odometer_params_;
-  
-  rclcpp::Node::SharedPtr node_handle_;
-  
-  image_transport::ImageTransport it_;
 
   image_transport::CameraSubscriber camera_sub_;
 
@@ -50,23 +44,17 @@ private:
   
 }; // MonoOdometer
 
-MonoOdometer::MonoOdometer(const std::string& name) 
-: OdometerBase(name)
-, node_handle_(std::shared_ptr<MonoOdometer>(this, [](auto*) {}))
-, it_(node_handle_)
+MonoOdometer::MonoOdometer(const std::string& transport) 
+: OdometerBase("mono_odometer")
 , replace_(false)
 {
+  RCLCPP_INFO(this->get_logger(), "The node needs rectified input images.");
   using namespace std::placeholders;
   // Read local parameters
   odometry_params::loadParams(this, visual_odometer_params_);
-  
-  rclcpp::QoS m_video_qos(2);
-  m_video_qos.keep_last(1);
-  m_video_qos.best_effort();
-  m_video_qos.durability_volatile();
 
-  camera_sub_ = it_.subscribeCamera("image", 1, 
-    std::bind(&MonoOdometer::imageCallback, this, _1, _2));
+  camera_sub_ = image_transport::create_camera_subscription(this, "image", 
+    std::bind(&MonoOdometer::imageCallback, this, _1, _2), transport);
 
   info_pub_ = this->create_publisher<viso2_msgs::msg::VisoInfo>("info", 1);
 }
@@ -150,9 +138,7 @@ void MonoOdometer::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& 
     info_msg.runtime = time_elapsed.seconds();
     info_pub_->publish(info_msg);
   }
-  
 }
-
 
 } // end of namespace
 
@@ -160,7 +146,9 @@ void MonoOdometer::imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& 
 int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<viso2_ros::MonoOdometer>("mono_odometer");
+  std::vector<std::string> args = rclcpp::remove_ros_arguments(argc, argv);
+  std::string transport = args.size() > 1 ? args[1] : "raw";
+  auto node = std::make_shared<viso2_ros::MonoOdometer>(transport);
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
