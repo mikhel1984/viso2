@@ -1,6 +1,6 @@
 viso2
 ==========
-ROS Stack containing a wrapper for libviso2, a visual odometry library. 
+ROS2 Stack containing a wrapper for libviso2, a visual odometry library. 
 http://www.ros.org/wiki/viso2 for the list of contained packages.
 ***
 
@@ -17,10 +17,10 @@ http://www.ros.org/wiki/viso2 for the list of contained packages.
 
 ### How to execute
 
-* To execute omnidirectional Libviso2 make sure you have a camera node publishing over ROS.
+* To execute omnidirectional Libviso2 make sure you have a camera node publishing over ROS2.
 * After that you can use the demo launch file that we provide in the following way:
 ```
-roslaunch viso2_ros demo.launch
+ros2 launch viso2_ros demo.launch.py
 ```
 * Make sure that first you set the **file calibration path** correctly by changing the `calib_path` parameter.
 * Also you can edit/add the default parameters that Libviso2 use (don't forget that camera height and pitch are mandatory to scale calculation).
