@@ -19,7 +19,7 @@ namespace viso2_ros
 class MonoOdometerOmnidirectional : public OdometerBase
 {
 public:
-  MonoOdometerOmnidirectional(const std::string& name);
+  MonoOdometerOmnidirectional(const std::string& transport);
 
 protected:
   void imageCallback(const sensor_msgs::msg::Image::ConstSharedPtr& image_msg);
@@ -29,10 +29,6 @@ private:
 
   VisualOdometryMonoOmnidirectional::parameters visual_odometer_params_;
 
-  rclcpp::Node::SharedPtr node_handle_;
-
-  image_transport::ImageTransport it_;
-
   image_transport::Subscriber camera_sub_;
 
   rclcpp::Publisher<viso2_msgs::msg::VisoInfo>::SharedPtr info_pub_;
@@ -40,19 +36,19 @@ private:
   bool replace_;
 };
 
-MonoOdometerOmnidirectional::MonoOdometerOmnidirectional(const std::string& name) 
-: OdometerBase(name)
-, node_handle_(std::shared_ptr<MonoOdometerOmnidirectional>(this, [](auto*) {}))
-, it_(node_handle_)
+MonoOdometerOmnidirectional::MonoOdometerOmnidirectional(const std::string& transport) 
+: OdometerBase("mono_odometer")
 , replace_(false)
 {
+  RCLCPP_INFO(this->get_logger(), "The node needs rectified input images.");
   using namespace std::placeholders; 
   // Read local parameters
   odometry_params::loadParams(this, visual_odometer_params_);
 
   std::string image_topic = this->declare_parameter<std::string>("/mono_odometer/image", "/image");
 
-  camera_sub_ = it_.subscribe(image_topic, 1, std::bind(&MonoOdometerOmnidirectional::imageCallback, this, _1));
+  camera_sub_ = image_transport::create_subscription(this, image_topic, 
+    std::bind(&MonoOdometerOmnidirectional::imageCallback, this, _1), transport);
 
   info_pub_ = this->create_publisher<viso2_msgs::msg::VisoInfo>("info", 1);
 }
@@ -141,7 +137,9 @@ void MonoOdometerOmnidirectional::imageCallback(const sensor_msgs::msg::Image::C
 int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<viso2_ros::MonoOdometerOmnidirectional>("mono_odometer");
+  std::vector<std::string> args = rclcpp::remove_ros_arguments(argc, argv);
+  std::string transport = args.size() > 1 ? args[1] : "raw";
+  auto node = std::make_shared<viso2_ros::MonoOdometerOmnidirectional>(transport);
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
