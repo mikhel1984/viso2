@@ -41,8 +41,8 @@ private:
   rclcpp::TimerBase::SharedPtr check_synced_timer_;
   int left_received_, right_received_, left_info_received_, right_info_received_, all_received_;
 
-  rclcpp::Node::SharedPtr node_handle_;
-  image_transport::ImageTransport it_;
+  //rclcpp::Node::SharedPtr node_handle_;
+  //image_transport::ImageTransport it_;
 
   // for sync checking
   static void increment(int* value)
@@ -90,7 +90,6 @@ private:
     }
   }
 
-
 protected:
 
   /**
@@ -98,28 +97,27 @@ protected:
    * callbacks.
    * \param transport The image transport to use
    */
-  StereoProcessor(const std::string& name)
-  : OdometerBase(name)
+  StereoProcessor(const std::string& transport)
+  : OdometerBase("stereo_odometer")
   , left_received_(0), right_received_(0), left_info_received_(0), right_info_received_(0), all_received_(0)
-  , node_handle_(std::shared_ptr<StereoProcessor>(this, [](auto*) {}))
-  , it_(node_handle_)
+  //, node_handle_(std::shared_ptr<StereoProcessor>(this, [](auto*) {}))
+  //, it_(node_handle_)
   {
 
     // Resolve topic names
-    std::string stereo_ns = "stereo";
-    std::string left_topic = stereo_ns + "/left/" + std::string("image");
-    std::string right_topic = stereo_ns + "/right/" + std::string("image");
+    std::string left_topic = "/left/image";
+    std::string right_topic = "/right/image";
 
-    std::string left_info_topic = stereo_ns + "/left/camera_info";
-    std::string right_info_topic = stereo_ns + "/right/camera_info";
+    std::string left_info_topic = "/left/camera_info";
+    std::string right_info_topic = "/right/camera_info";
 
     // Subscribe to four input topics.
     RCLCPP_INFO(this->get_logger(), "Subscribing to:\n\t* %s\n\t* %s\n\t* %s\n\t* %s",
         left_topic.c_str(), right_topic.c_str(),
         left_info_topic.c_str(), right_info_topic.c_str());
 
-    left_sub_.subscribe(this, left_topic, "raw");
-    right_sub_.subscribe(this, right_topic, "raw");
+    left_sub_.subscribe(this, left_topic, transport);
+    right_sub_.subscribe(this, right_topic, transport);
     left_info_sub_.subscribe(this, left_info_topic);
     right_info_sub_.subscribe(this, right_info_topic);
 

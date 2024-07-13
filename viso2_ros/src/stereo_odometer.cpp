@@ -69,6 +69,7 @@ public:
     StereoProcessor(transport),
     got_lost_(false), change_reference_frame_(false)
   {
+    RCLCPP_INFO(this->get_logger(), "The node needs rectified input images.");
     // Read local parameters
     odometry_params::loadParams(this, visual_odometer_params_);
 
@@ -88,7 +89,7 @@ protected:
       const sensor_msgs::msg::CameraInfo::ConstSharedPtr& l_info_msg,
       const sensor_msgs::msg::CameraInfo::ConstSharedPtr& r_info_msg)
   {
-    int queue_size = this->get_parameter("queue_size").as_int();
+    int queue_size        = this->get_parameter("queue_size").as_int();
     bool approximate_sync = this->get_parameter("approximate_sync").as_bool();
 
     // read calibration info from camera info message
@@ -341,7 +342,9 @@ protected:
 int main(int argc, char **argv)
 {
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<viso2_ros::StereoOdometer>("stereo_odometer");
+  std::vector<std::string> args = rclcpp::remove_ros_arguments(argc, argv);
+  std::string transport = args.size() > 1 ? args[1] : "raw";
+  auto node = std::make_shared<viso2_ros::StereoOdometer>(transport);
   rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
