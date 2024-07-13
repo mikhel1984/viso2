@@ -39,8 +39,7 @@ else(ARM_CROSS_COMPILATION)
 endif(ARM_CROSS_COMPILATION)
 
 
-add_executable(stereo_odometer src/stereo_odometer.cpp)
-ament_target_dependencies(stereo_odometer
+set(COMMON_DEPS
   rclcpp
   nav_msgs
   sensor_msgs
@@ -51,45 +50,23 @@ ament_target_dependencies(stereo_odometer
   tf2_geometry_msgs
   image_geometry
   cv_bridge
-)
-target_link_libraries(stereo_odometer
-  libviso2::viso2
 )
 
-add_executable(mono_odometer
-  src/mono_odometer.cpp)
-ament_target_dependencies(mono_odometer
-  rclcpp
-  nav_msgs
-  sensor_msgs
-  image_transport
-  viso2_msgs
-  std_srvs
-  tf2_ros
-  tf2_geometry_msgs
-  image_geometry
-  cv_bridge
-)
-target_link_libraries(mono_odometer
-  libviso2::viso2
-)
+
+add_executable(stereo_odometer src/stereo_odometer.cpp)
+ament_target_dependencies(stereo_odometer ${COMMON_DEPS})
+target_link_libraries(stereo_odometer libviso2::viso2)
+
+
+add_executable(mono_odometer src/mono_odometer.cpp)
+ament_target_dependencies(mono_odometer ${COMMON_DEPS})
+target_link_libraries(mono_odometer libviso2::viso2)
+
 
 add_executable(mono_odometer_omnidirectional src/mono_odometer_omnidirectional.cpp)
-ament_target_dependencies(mono_odometer_omnidirectional
-  rclcpp
-  nav_msgs
-  sensor_msgs
-  image_transport
-  viso2_msgs
-  std_srvs
-  tf2_ros
-  tf2_geometry_msgs
-  image_geometry
-  cv_bridge
-)
-target_link_libraries(mono_odometer_omnidirectional
-  libviso2::viso2
-)
+ament_target_dependencies(mono_odometer_omnidirectional ${COMMON_DEPS})
+target_link_libraries(mono_odometer_omnidirectional libviso2::viso2)
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
